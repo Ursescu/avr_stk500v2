@@ -1,2 +1,11 @@
 .vscode/
 bootloadHID/
+*.lst
+*.o
+.dep/
+*.hex
+*.eep
+*.lss
+*.map
+*.elf
+*.sym
