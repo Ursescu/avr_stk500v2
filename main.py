@@ -1,0 +1,8 @@
+CMD_SIGN_ON = [0x1b, 0x00, 0x00, 0x01, 0x0e, 0x01]
+
+xor = 0
+
+for byte in CMD_SIGN_ON:
+    xor ^= byte
+
+print(hex(xor))
