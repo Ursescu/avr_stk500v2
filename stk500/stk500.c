@@ -4,6 +4,7 @@
 #include "stk500.h"
 #include "protocol.h"
 #include "command.h"
+#include "misc.h"
 #include "../util.h"
 
 PRIVATE STK500_command_t command;
@@ -201,9 +202,10 @@ PUBLIC bool processByteSTK500(uint8_t byte)
 
 PUBLIC bool handleCommandSTK500()
 {
-    uint8_t *commandBuffer;
+    uint8_t *commandBuffer, *resp;
     uint8_t commandId;
     bool error = FALSE;
+    uint32_t size = 0U;
 
     if (fsm != PROCESSED)
     {
@@ -224,16 +226,17 @@ PUBLIC bool handleCommandSTK500()
     /* Handle STK500 command */
     commandBuffer = command.body;
     commandId = commandBuffer[0];
+    resp = response.body;
 
     switch (commandId)
     {
     case CMD_SIGN_ON:
     {
-        response.body[0] = CMD_SIGN_ON;
-        response.body[1] = STATUS_CMD_OK;
-        response.body[2] = 8U;
-        memcpy(&response.body[3], STK500_SIGNATURE, sizeof(STK500_SIGNATURE) - 1);
-        response.size = 11U;
+        WRITE_BUF8(resp, CMD_SIGN_ON, size);
+        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+        WRITE_BUF8(resp, 8U, size);
+        memcpy(resp, STK500_SIGNATURE, sizeof(STK500_SIGNATURE) - 1);
+        size += sizeof(STK500_SIGNATURE) - 1;
         break;
     }
 
@@ -248,9 +251,8 @@ PUBLIC bool handleCommandSTK500()
 
         status = setParamVal(paramId, paramVal);
 
-        response.body[0] = CMD_SET_PARAMETER;
-        response.body[1] = (status == TRUE) ? STATUS_CMD_OK : STATUS_CMD_FAILED;
-        response.size = 2U;
+        WRITE_BUF8(resp, CMD_SET_PARAMETER, size);
+        WRITE_BUF8(resp, ((status == TRUE) ? STATUS_CMD_OK : STATUS_CMD_FAILED), size);
         break;
     }
 
@@ -262,23 +264,37 @@ PUBLIC bool handleCommandSTK500()
 
         paramId = commandBuffer[1];
         status = getParamVal(paramId, &paramVal);
-        response.body[0] = CMD_GET_PARAMETER;
+        WRITE_BUF8(resp, CMD_GET_PARAMETER, size);
 
         if (status)
         {
-            response.body[1] = STATUS_CMD_OK;
-            response.body[2] = paramVal;
-            response.size = 3U;
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            WRITE_BUF8(resp, paramVal, size);
         }
         else
         {
-            response.body[1] = STATUS_CMD_FAILED;
-            response.size = 2U;
+            WRITE_BUF8(resp, STATUS_CMD_FAILED, size);
         }
+        break;
+    }
+    case CMD_ENTER_PROGMODE_ISP:
+    {
+        WRITE_BUF8(resp, CMD_ENTER_PROGMODE_ISP, size);
+        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+        break;
+    }
+
+    case CMD_LEAVE_PROGMODE_ISP:
+    {
+        WRITE_BUF8(resp, CMD_LEAVE_PROGMODE_ISP, size);
+        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
         break;
     }
     default:
         /* Unhandleded command */
+        error = TRUE;
         break;
     }
 
@@ -287,6 +303,9 @@ PUBLIC bool handleCommandSTK500()
         fsm = IDLE;
         return FALSE;
     }
+
+    /* Set length */
+    response.size = size;
 
     /* Calculate checksum */
     response.checksum = checksum(&response);
