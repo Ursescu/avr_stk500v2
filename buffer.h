@@ -12,12 +12,12 @@ typedef struct CircBuffer
     uint8_t *_buffer;
 } CircBuffer_t;
 
-#define CIRC_BUFFER(name, buffer, len)   \
-    CircBuffer_t name = {   \
-        .length = 0U,       \
-        .indexRead = 0U,    \
-        .indexWrite = 0U,   \
-        .buff_size = (len), \
+#define CIRC_BUFFER(name, buffer, len) \
+    static CircBuffer_t name = {       \
+        .length = 0U,                  \
+        .indexRead = 0U,               \
+        .indexWrite = 0U,              \
+        .buff_size = (len),            \
         ._buffer = (uint8_t *)(buffer)}
 
 bool getByteBuffer(CircBuffer_t *buffer, uint8_t *byte);
