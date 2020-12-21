@@ -10,8 +10,6 @@
 #define SPI_DDR DDRB
 #define SPI_PORT PORTB
 
-#define SPI_BUFFER_SIZE 200
-
 static uint8_t _txBuffer[SPI_BUFFER_SIZE];
 static uint8_t _rxBuffer[SPI_BUFFER_SIZE];
 
@@ -21,9 +19,8 @@ CIRC_BUFFER(spiRxBuffer, _rxBuffer, SPI_BUFFER_SIZE);
 volatile bool SPI_ACTIVE = FALSE;
 volatile uint32_t reqNumBytes = 0U;
 
-bool initSPI(uint8_t mode, uint8_t clock)
+PUBLIC bool initSPI(uint8_t mode, uint8_t clock)
 {
-
     // Set MOSI and SCK output
     SPI_DDR |= _BV(SPI_MOSI) | _BV(SPI_SCK);
 
@@ -40,7 +37,7 @@ bool initSPI(uint8_t mode, uint8_t clock)
     return TRUE;
 }
 
-bool triggerSendSPI(void)
+PRIVATE bool triggerSendSPI(void)
 {
     if (!SPI_ACTIVE)
     {
@@ -62,7 +59,7 @@ bool triggerSendSPI(void)
     return FALSE;
 }
 
-bool triggerReceiveSPI(uint32_t numBytes)
+PUBLIC bool sendSpiReceive(uint32_t numBytes)
 {
     reqNumBytes = numBytes;
 
@@ -76,31 +73,20 @@ bool triggerReceiveSPI(uint32_t numBytes)
     return TRUE;
 }
 
-bool sendByteSPI(uint8_t byte)
-{
-    if (writeByteBuffer(&spiTxBuffer, byte))
-    {
-        return TRUE;
+PUBLIC bool sendSpiByte(uint8_t byte) {
+    if(writeByteBuffer(&spiTxBuffer, byte)) {
+        return triggerSendSPI();
     }
 
     return FALSE;
 }
 
-bool getByteSPI(uint8_t *byte)
-{
-    uint8_t tempByte = 0;
-    if (getByteBuffer(&spiRxBuffer, &tempByte))
-    {
-        *byte = tempByte;
-        return TRUE;
-    }
-
-    return FALSE;
+PUBLIC bool getSpiByte(uint8_t *byte) {
+    return getByteBuffer(&spiRxBuffer, byte);
 }
 
 ISR(SPI_STC_vect)
 {
-
     // Receive data
     if (!isFullBuffer(&spiRxBuffer))
     {

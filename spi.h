@@ -3,12 +3,14 @@
 
 #include "util.h"
 
-bool initSPI(uint8_t mode, uint8_t clock);
+#define SPI_BUFFER_SIZE 100
 
-bool sendByteSPI(uint8_t byte);
-bool getByteSPI(uint8_t *byte);
+PUBLIC bool initSPI(uint8_t mode, uint8_t clock);
 
-bool triggerSendSPI(void);
-bool triggerReceiveSPI(uint32_t numBytes);
+PUBLIC bool sendSpiByte(uint8_t byte);
+PUBLIC bool getSpiByte(uint8_t *byte);
+
+/* In case need some bytes without explicit send */
+PUBLIC bool sendSpiReceive(uint32_t numBytes);
 
 #endif
