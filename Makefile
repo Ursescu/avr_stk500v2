@@ -60,7 +60,7 @@ TARGET = main
 # Object files directory
 #     To put object files in current directory, use a dot (.), do NOT make
 #     this an empty or blank macro!
-OBJDIR = .
+OBJDIR = build
 
 
 # List C source files here. (C dependencies are automatically generated.)
@@ -105,7 +105,8 @@ DEBUG = dwarf-2
 #     Each directory must be seperated by a space.
 #     Use forward slashes for directory separators.
 #     For a directory that has spaces, enclose it in quotes.
-EXTRAINCDIRS = 
+EXTRAINCDIRS = 	dbg/include \
+				stk500/include \
 
 
 # Compiler flag to set the C Standard level.
@@ -251,7 +252,7 @@ EXTMEMOPTS =
 #  -Wl,...:     tell GCC to pass this to linker.
 #    -Map:      create map file
 #    --cref:    add cross reference to  map file
-LDFLAGS = -Wl,-Map=$(TARGET).map,--cref
+LDFLAGS = -Wl,-Map=$(OBJDIR)/$(TARGET).map,--cref
 LDFLAGS += $(EXTMEMOPTS)
 LDFLAGS += $(patsubst %,-L%,$(EXTRALIBDIRS))
 LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
@@ -268,11 +269,11 @@ LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
 AVRDUDE_PROGRAMMER = stk500
 
 # com1 = serial port. Use lpt1 to connect to parallel port.
-AVRDUDE_PORT = /dev/ttyUSB0    # programmer connected to serial device
+AVRDUDE_PORT = /dev/ttyUSB1    # programmer connected to serial device
 
 AVRDUDE_BAUD = 38400
 
-AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
+AVRDUDE_WRITE_FLASH = -U flash:w:/shared/projects/PWM_Reverter/reverter/build/main.hex
 #AVRDUDE_WRITE_EEPROM = -U eeprom:w:$(TARGET).eep
 
 
@@ -290,7 +291,7 @@ AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 # to submit bug reports.
 AVRDUDE_VERBOSE = -v -v
 
-AVRDUDE_MCU = m324p
+AVRDUDE_MCU = t85
 
 AVRDUDE_FLAGS = -p $(AVRDUDE_MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER) -b $(AVRDUDE_BAUD)
 AVRDUDE_FLAGS += $(AVRDUDE_NO_VERIFY)
@@ -388,25 +389,38 @@ ALL_CPPFLAGS = -mmcu=$(MCU) -I. -x c++ $(CPPFLAGS) $(GENDEPFLAGS)
 ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 
 
+define uniq =
+  $(eval seen :=)
+  $(foreach _,$1,$(if $(filter $_,${seen}),,$(eval seen += $_)))
+  ${seen}
+endef
 
+# Remove space after separator
+PSEP = $(strip $(SEP))
 
+SOURCEDIRS = $(filter-out ./, $(call uniq, $(dir $(SRC))))
+
+BUILDDIRS = $(addprefix $(OBJDIR)/, $(SOURCEDIRS))
 
 # Default target.
 all: begin gccversion sizebefore build sizeafter end
 
 # Change the build target to build a HEX file or a library.
-build: elf hex eep lss sym
+build: directories elf hex eep lss sym
 #build: lib
 
 
 elf: $(TARGET).elf
-hex: $(TARGET).hex
-eep: $(TARGET).eep
-lss: $(TARGET).lss
-sym: $(TARGET).sym
+	mv $(TARGET).elf $(OBJDIR)/
+hex: $(OBJDIR)/$(TARGET).hex
+eep: $(OBJDIR)/$(TARGET).eep
+lss: $(OBJDIR)/$(TARGET).lss
+sym: $(OBJDIR)/$(TARGET).sym
 LIBNAME=lib$(TARGET).a
 lib: $(LIBNAME)
 
+directories:
+	@mkdir -p $(BUILDDIRS)
 
 
 # Eye candy.
@@ -422,15 +436,15 @@ end:
 
 
 # Display size of file.
-HEXSIZE = $(SIZE) --target=$(FORMAT) $(TARGET).hex
-ELFSIZE = $(SIZE) --mcu=$(MCU) --format=avr $(TARGET).elf
+HEXSIZE = $(SIZE) --target=$(FORMAT) $(OBJDIR)/$(TARGET).hex
+ELFSIZE = $(SIZE) --mcu=$(MCU) --format=avr $(OBJDIR)/$(TARGET).elf
 
 sizebefore:
-	@if test -f $(TARGET).elf; then echo; echo $(MSG_SIZE_BEFORE); $(ELFSIZE); \
+	@if test -f $(OBJDIR)/$(TARGET).elf; then echo; echo $(MSG_SIZE_BEFORE); $(ELFSIZE); \
 	2>/dev/null; echo; fi
 
 sizeafter:
-	@if test -f $(TARGET).elf; then echo; echo $(MSG_SIZE_AFTER); $(ELFSIZE); \
+	@if test -f $(OBJDIR)/$(TARGET).elf; then echo; echo $(MSG_SIZE_AFTER); $(ELFSIZE); \
 	2>/dev/null; echo; fi
 
 
@@ -586,13 +600,13 @@ clean: begin clean_list end
 clean_list :
 	@echo
 	@echo $(MSG_CLEANING)
-	$(REMOVE) $(TARGET).hex
-	$(REMOVE) $(TARGET).eep
-	$(REMOVE) $(TARGET).cof
-	$(REMOVE) $(TARGET).elf
-	$(REMOVE) $(TARGET).map
-	$(REMOVE) $(TARGET).sym
-	$(REMOVE) $(TARGET).lss
+	$(REMOVE) $(OBJDIR)/$(TARGET).hex
+	$(REMOVE) $(OBJDIR)/$(TARGET).eep
+	$(REMOVE) $(OBJDIR)/$(TARGET).cof
+	$(REMOVE) $(OBJDIR)/$(TARGET).elf
+	$(REMOVE) $(OBJDIR)/$(TARGET).map
+	$(REMOVE) $(OBJDIR)/$(TARGET).sym
+	$(REMOVE) $(OBJDIR)/$(TARGET).lss
 	$(REMOVE) $(SRC:%.c=$(OBJDIR)/%.o)
 	$(REMOVE) $(SRC:%.c=$(OBJDIR)/%.lst)
 	$(REMOVE) $(SRC:.c=.s)
