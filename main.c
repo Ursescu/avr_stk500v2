@@ -1,92 +1,57 @@
-#include "avr/io.h"
-#include "avr/interrupt.h"
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <util/delay.h>
 
-#include "util/delay.h"
+#include <serial.h>
+#include <buffer.h>
+#include <util.h>
+#include <spi.h>
+#include <stk500.h>
+#include <dbg.h>
+#include <timer.h>
 
-#include "serial.h"
-#include "buffer.h"
-#include "util.h"
-#include "spi.h"
-#include "stk500/stk500.h"
+#define RESET_TARGET_DDR DDRD
+#define RESET_TARGET_PORT PORTD
+#define RESET_TARGET_PIN PD6
 
-#define SERIAL_BUFFER_SIZE 200
+PRIVATE uartSendByteFunc_t sendUser = sendUartByte;
+PRIVATE uartGetByteFunc_t getUser = getUartByte;
+PRIVATE spiSendByteFunc_t sendTarget = sendSpiByte;
+PRIVATE spiGetByteFunc_t getTarget = getSpiByte;
+PRIVATE resetTargetFunc_t resetTarget = NULL;
 
-static uint8_t rxUartBuffer[SERIAL_BUFFER_SIZE];
-static uint8_t txUartBuffer[SERIAL_BUFFER_SIZE];
-
-CIRC_BUFFER(uartTxBuffer, txUartBuffer, SERIAL_BUFFER_SIZE);
-CIRC_BUFFER(uartRxBuffer, rxUartBuffer, SERIAL_BUFFER_SIZE);
-
-void serialTransmitCb(void)
-{
-    uint8_t byte;
-
-    if (getByteBuffer(&uartTxBuffer, &byte))
-    {  
-        serialPutByte(byte);
-    }
-    else {
-        enableSerial(1, 0);
-    }
-};
-
-void serialReceiveCb(void)
-{
-    uint8_t byte = 0;
-    serialGetByte(&byte);
-    writeByteBuffer(&uartRxBuffer, byte);
-};
-
-bool pushToTxSerialQueue(uint8_t byte) {
-    return writeByteBuffer(&uartTxBuffer, byte);
-}
+#define UART_BAUDRATE 38400
 
 int main(void)
 {
-    cli();
+    initMSTimer();
 
     // Init serial
-    initSerial(8, 2);
+    initUart(UART_BAUDRATE, BITS_8, PAR_NONE);
 
-    // Enable receive and transmit
-    enableSerial(1, 0);
-    // // Init SPI, mode 0 with clock div 128
+    // Enable debug print
+    initDBG();
+
+    // Init SPI, mode 0 with clock div 128
     initSPI(0, 3);
 
-    initSTK500(pushToTxSerialQueue);
+    initSTK500(sendUser, getUser, sendTarget, getTarget, resetTarget);
 
     // Debug led output
     DDRD |= _BV(PD7);
 
+    // Set the reset pin to output 
+    RESET_TARGET_DDR |= _BV(RESET_TARGET_PIN);
+
     // Enable interrupts
     sei();
-
-    DDRD |= _BV(PD6);
-
-    PORTD |= _BV(PD6);
-
-    // Reset UC
-    PORTD &= ~(_BV(PD6));
-
-    uint8_t byte;
 
     // Main loop
     while (1)
     {
-        // Get from UART
-        if(getByteBuffer(&uartRxBuffer, &byte)) {
-            processByteSTK500(byte);
-        }
-
-        // Call this every time
-        if(handleCommandSTK500()) {
-            enableSerial(1, 1);
-        }
-
-        // if (getByteSPI(&byte)) {
-        //     writeByteBuffer(&uartTxBuffer, byte);
-        //     enableSerial(0, 1);
-        // }
+        tickSTK500();
     }
 
     return 0;
