@@ -1,7 +1,7 @@
 #ifndef _BUFFER_H_
 #define _BUFFER_H_
 
-#include "util.h"
+#include <util.h>
 
 typedef struct CircBuffer
 {

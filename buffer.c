@@ -1,44 +1,53 @@
 #include <avr/io.h>
-#include "util.h"
-#include "buffer.h"
-
-#define BUFF_SIZE 300
+#include <avr/interrupt.h>
+#include <util/atomic.h>
+#include <util.h>
+#include <buffer.h>
 
 bool getByteBuffer(CircBuffer_t *buffer, uint8_t *byte)
 {
-
-    if (buffer->length > 0U)
+    bool empty = FALSE;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
-        *byte = buffer->_buffer[buffer->indexRead];
-    }
-    else
-    {
-        return FALSE;
-    }
+        empty = isEmptyBuffer(buffer);
 
-    buffer->length--;
-    buffer->indexRead++;
-    buffer->indexRead %= buffer->buff_size;
+        if (!empty)
+        {
+            *byte = buffer->_buffer[buffer->indexRead];
+        }
+        else
+        {
+            return FALSE;
+        }
+
+        buffer->length--;
+        buffer->indexRead++;
+        buffer->indexRead %= buffer->buff_size;
+    }
 
     return TRUE;
 }
 
 bool writeByteBuffer(CircBuffer_t *buffer, uint8_t byte)
 {
-
-    if (buffer->length < buffer->buff_size)
+    bool full = FALSE;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
-        buffer->_buffer[buffer->indexWrite] = byte;
-    }
-    else
-    {
-        return FALSE;
-    }
+        full = isFullBuffer(buffer);
 
-    buffer->indexWrite++;
-    buffer->length++;
-    buffer->indexWrite %= buffer->buff_size;
+        if (!full)
+        {
+            buffer->_buffer[buffer->indexWrite] = byte;
+        }
+        else
+        {
+            return FALSE;
+        }
 
+        buffer->length++;
+        buffer->indexWrite++;
+        buffer->indexWrite %= buffer->buff_size;
+    }
     return TRUE;
 }
 
@@ -47,10 +56,12 @@ uint32_t getBufferFreeSpace(CircBuffer_t *buffer)
     return buffer->length;
 }
 
-bool isEmptyBuffer(CircBuffer_t *buffer) {
+bool isEmptyBuffer(CircBuffer_t *buffer)
+{
     return buffer->length == 0U;
 }
 
-bool isFullBuffer(CircBuffer_t *buffer) {
+bool isFullBuffer(CircBuffer_t *buffer)
+{
     return buffer->length == buffer->buff_size;
 }
