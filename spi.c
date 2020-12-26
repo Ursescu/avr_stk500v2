@@ -19,8 +19,7 @@ CIRC_BUFFER(spiRxBuffer, _rxBuffer, SPI_BUFFER_SIZE);
 volatile bool SPI_ACTIVE = FALSE;
 volatile uint32_t reqNumBytes = 0U;
 
-PUBLIC bool initSPI(uint8_t mode, uint8_t clock)
-{
+PUBLIC bool initSPI(uint8_t mode, uint8_t clock) {
     // Set MOSI and SCK output
     SPI_DDR |= _BV(SPI_MOSI) | _BV(SPI_SCK);
 
@@ -37,19 +36,14 @@ PUBLIC bool initSPI(uint8_t mode, uint8_t clock)
     return TRUE;
 }
 
-PRIVATE bool triggerSendSPI(void)
-{
-    if (!SPI_ACTIVE)
-    {
+PRIVATE bool triggerSendSPI(void) {
+    if (!SPI_ACTIVE) {
         SPI_ACTIVE = TRUE;
 
-        if (!isEmptyBuffer(&spiTxBuffer))
-        {
+        if (!isEmptyBuffer(&spiTxBuffer)) {
             uint8_t byte;
 
-            if (getByteBuffer(&spiTxBuffer, &byte))
-            {
-
+            if (getByteBuffer(&spiTxBuffer, &byte)) {
                 SPDR = byte;
                 return TRUE;
             }
@@ -59,12 +53,10 @@ PRIVATE bool triggerSendSPI(void)
     return FALSE;
 }
 
-PUBLIC bool sendSpiReceive(uint32_t numBytes)
-{
+PUBLIC bool sendSpiReceive(uint32_t numBytes) {
     reqNumBytes = numBytes;
 
-    if (!SPI_ACTIVE)
-    {
+    if (!SPI_ACTIVE) {
         SPI_ACTIVE = TRUE;
 
         SPDR = 0x00;
@@ -74,7 +66,7 @@ PUBLIC bool sendSpiReceive(uint32_t numBytes)
 }
 
 PUBLIC bool sendSpiByte(uint8_t byte) {
-    if(writeByteBuffer(&spiTxBuffer, byte)) {
+    if (writeByteBuffer(&spiTxBuffer, byte)) {
         return triggerSendSPI();
     }
 
@@ -85,29 +77,22 @@ PUBLIC bool getSpiByte(uint8_t *byte) {
     return getByteBuffer(&spiRxBuffer, byte);
 }
 
-ISR(SPI_STC_vect)
-{
+ISR(SPI_STC_vect) {
     // Receive data
-    if (!isFullBuffer(&spiRxBuffer))
-    {
+    if (!isFullBuffer(&spiRxBuffer)) {
         writeByteBuffer(&spiRxBuffer, SPDR);
     }
 
     // Send data
-    if (!isEmptyBuffer(&spiTxBuffer))
-    {
+    if (!isEmptyBuffer(&spiTxBuffer)) {
         uint8_t byte;
 
         getByteBuffer(&spiTxBuffer, &byte);
         SPDR = byte;
-    }
-    else if (reqNumBytes > 0U)
-    {
+    } else if (reqNumBytes > 0U) {
         reqNumBytes--;
-        SPDR = 0x00; // Fill with 0
-    }
-    else
-    {
+        SPDR = 0x00;  // Fill with 0
+    } else {
         // Done
         SPI_ACTIVE = FALSE;
     }

@@ -5,8 +5,7 @@
 
 PRIVATE volatile uint64_t counter;
 
-PUBLIC bool initMSTimer(void)
-{
+PUBLIC bool initMSTimer(void) {
     uint16_t OCRA = 0U;
 
     // CTC on OCR1A - WGM3:0 - 4
@@ -27,8 +26,7 @@ PUBLIC bool initMSTimer(void)
     return TRUE;
 }
 
-PUBLIC uint64_t timer_read_counter(void)
-{
+PUBLIC uint64_t timer_read_counter(void) {
     uint64_t temp;
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
         temp = counter;
@@ -37,19 +35,16 @@ PUBLIC uint64_t timer_read_counter(void)
     return temp;
 }
 
-PUBLIC void delay_ms(uint64_t ms_count)
-{
+PUBLIC void delay_ms(uint64_t ms_count) {
     uint64_t base = timer_read_counter();
 
-    while((timer_read_counter() - base) < ms_count) {
+    while ((timer_read_counter() - base) < ms_count) {
         // Loop here
         ;
     }
 }
 
-ISR(TIMER1_COMPA_vect)
-{
-
+ISR(TIMER1_COMPA_vect) {
     // Increase the counter
     counter++;
 }

@@ -2,19 +2,17 @@
 #define _SERIAL_DBG_H_
 
 #include <avr/io.h>
-#include "util.h"
+#include <util.h>
 
 #define SERIAL_BUFFER_SIZE 100
 
-typedef enum
-{
+typedef enum {
     PAR_NONE,
     PAR_ODD,
     PAR_EVEN
 } UART_parity;
 
-typedef enum
-{
+typedef enum {
     BITS_8,
     BITS_7
 } UART_bits;

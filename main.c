@@ -24,8 +24,7 @@ PRIVATE resetTargetFunc_t resetTarget = NULL;
 
 #define UART_BAUDRATE 38400
 
-int main(void)
-{
+int main(void) {
     initMSTimer();
 
     // Init serial
@@ -42,15 +41,14 @@ int main(void)
     // Debug led output
     DDRD |= _BV(PD7);
 
-    // Set the reset pin to output 
+    // Set the reset pin to output
     RESET_TARGET_DDR |= _BV(RESET_TARGET_PIN);
 
     // Enable interrupts
     sei();
 
     // Main loop
-    while (1)
-    {
+    while (1) {
         tickSTK500();
     }
 

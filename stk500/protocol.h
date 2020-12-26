@@ -25,8 +25,7 @@
 #define STK500_FLASH_HIGH_BYTE_CMD(cmd) ((cmd) | (1 << STK500_FLASH_HIGH_BYTE_BIT))
 #define STK500_FLASH_LOW_BYTE_CMD(cmd) ((cmd) & ~(1 << STK500_FLASH_HIGH_BYTE_BIT))
 
-typedef struct STK500_command
-{
+typedef struct STK500_command {
     uint8_t start;
     uint8_t seq;
     uint16_t size;
@@ -35,8 +34,7 @@ typedef struct STK500_command
     uint8_t body[STK500_MAX_SIZE];
 } STK500_command_t;
 
-typedef enum
-{
+typedef enum {
     START = 0x00,
     SEQ,
     SIZE,
@@ -45,22 +43,19 @@ typedef enum
     CHECKSUM
 } STK500_command_states;
 
-typedef enum
-{
+typedef enum {
     IDLE = 0x00,
     PROCESSING,
     PROCESSED,
     HANDLING,
 } STK500_fsm_states;
 
-typedef struct STK500_param
-{
+typedef struct STK500_param {
     uint8_t id;
     uint8_t value;
 } STK500_param_t;
 
-typedef struct STK500_settings
-{
+typedef struct STK500_settings {
     bool inProgMode;
     uint8_t timeout;
     uint32_t loadAddress;

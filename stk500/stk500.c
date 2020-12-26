@@ -49,8 +49,7 @@ PRIVATE STK500_param_t params[] = {
     {PARAM_CONTROLLER_INIT, 0U},
 };
 
-PRIVATE uint8_t checksum(STK500_command_t *command)
-{
+PRIVATE uint8_t checksum(STK500_command_t *command) {
     uint8_t xor = 0U;
 
     xor ^= command->start;
@@ -59,20 +58,16 @@ PRIVATE uint8_t checksum(STK500_command_t *command)
     xor ^= (uint8_t)(command->size);
     xor ^= command->token;
 
-    for (uint32_t index = 0; index < command->size; index++)
-    {
+    for (uint32_t index = 0; index < command->size; index++) {
         xor ^= command->body[index];
     }
 
     return xor;
 }
 
-PRIVATE bool getParamVal(uint8_t id, uint8_t *val)
-{
-    for (uint8_t index = 0; index < LEN(params); index++)
-    {
-        if (params[index].id == id)
-        {
+PRIVATE bool getParamVal(uint8_t id, uint8_t *val) {
+    for (uint8_t index = 0; index < LEN(params); index++) {
+        if (params[index].id == id) {
             *val = params[index].value;
             return TRUE;
         }
@@ -81,12 +76,9 @@ PRIVATE bool getParamVal(uint8_t id, uint8_t *val)
     return FALSE;
 }
 
-PRIVATE bool setParamVal(uint8_t id, uint8_t val)
-{
-    for (uint8_t index = 0; index < LEN(params); index++)
-    {
-        if (params[index].id == id)
-        {
+PRIVATE bool setParamVal(uint8_t id, uint8_t val) {
+    for (uint8_t index = 0; index < LEN(params); index++) {
+        if (params[index].id == id) {
             params[index].value = val;
             return TRUE;
         }
@@ -95,8 +87,7 @@ PRIVATE bool setParamVal(uint8_t id, uint8_t val)
     return FALSE;
 }
 
-PRIVATE bool pushResponse(void)
-{
+PRIVATE bool pushResponse(void) {
     /* Push bytes to user - Order matters */
 
     userSend(response.start);
@@ -104,8 +95,7 @@ PRIVATE bool pushResponse(void)
     userSend((uint8_t)(response.size >> 8));
     userSend(((uint8_t)(response.size)));
     userSend(response.token);
-    for (uint32_t index = 0; index < response.size; index++)
-    {
+    for (uint32_t index = 0; index < response.size; index++) {
         userSend(response.body[index]);
     }
     userSend(response.checksum);
@@ -113,30 +103,25 @@ PRIVATE bool pushResponse(void)
     return TRUE;
 }
 
-PRIVATE bool sendCommand(const uint8_t *cmd, uint8_t *out)
-{
+PRIVATE bool sendCommand(const uint8_t *cmd, uint8_t *out) {
     uint64_t timerCounter;
     uint8_t byteIndex = 0U;
     uint8_t recvByte;
     bool timeouted = FALSE;
 
-    for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++)
-    {
+    for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++) {
         targetSend(cmd[index]);
     }
 
     timerCounter = timer_read_counter();
 
     /* Should poll for the byte */
-    while (byteIndex < STK500_ISP_COMMAND_LEN && !timeouted)
-    {
-        if ((timer_read_counter() - timerCounter) >= settings.timeout)
-        {
+    while (byteIndex < STK500_ISP_COMMAND_LEN && !timeouted) {
+        if ((timer_read_counter() - timerCounter) >= settings.timeout) {
             timeouted = TRUE;
             break;
         }
-        if (targetGet(&recvByte))
-        {
+        if (targetGet(&recvByte)) {
             (*out++) = recvByte;
             byteIndex++;
         }
@@ -148,15 +133,13 @@ PRIVATE bool sendCommand(const uint8_t *cmd, uint8_t *out)
     return TRUE;
 }
 
-PRIVATE bool pollRDY(uint8_t *val)
-{
+PRIVATE bool pollRDY(uint8_t *val) {
     uint8_t cmd[STK500_ISP_COMMAND_LEN] = {0xf0, 0x00, 0x00, 0x00};
     uint8_t out[STK500_ISP_COMMAND_LEN] = {
         0U,
     };
 
-    if (!sendCommand(cmd, out))
-    {
+    if (!sendCommand(cmd, out)) {
         return FALSE;
     }
 
@@ -165,93 +148,80 @@ PRIVATE bool pollRDY(uint8_t *val)
     return TRUE;
 }
 
-PRIVATE bool processByteSTK500(uint8_t byte)
-{
+PRIVATE bool processByteSTK500(uint8_t byte) {
     static STK500_command_states state = START;
     static uint32_t requested = 0U;
 
     bool error = FALSE;
 
-    switch (state)
-    {
-    case START:
-        command.start = byte;
-        state = SEQ;
-        fsm = PROCESSING;
-        if (command.start != MESSAGE_START)
-        {
-            error = TRUE;
-        }
-        break;
-    case SEQ:
-        command.seq = byte;
-        state = SIZE;
-        requested = 2U;
-        break;
-    case SIZE:
-    {
-        switch (requested)
-        {
-        case 2U:
-            command.size = (byte << 8);
-            requested--;
+    switch (state) {
+        case START:
+            command.start = byte;
+            state = SEQ;
+            fsm = PROCESSING;
+            if (command.start != MESSAGE_START) {
+                error = TRUE;
+            }
             break;
+        case SEQ:
+            command.seq = byte;
+            state = SIZE;
+            requested = 2U;
+            break;
+        case SIZE: {
+            switch (requested) {
+                case 2U:
+                    command.size = (byte << 8);
+                    requested--;
+                    break;
+                default:
+                    command.size = (command.size & 0xff00) | byte;
+                    requested = 0U;
+                    state = TOKEN;
+                    break;
+            }
+            break;
+        }
+        case TOKEN: {
+            command.token = byte;
+            state = BODY;
+            requested = command.size;
+            if (requested > STK500_MAX_SIZE || command.token != MESSAGE_TOKEN) {
+                error = TRUE;
+            }
+            break;
+        }
+
+        case BODY: {
+            if (requested > 0U) {
+                command.body[command.size - requested] = byte;
+                requested--;
+            }
+
+            if (requested == 0U) {
+                state = CHECKSUM;
+            }
+
+            break;
+        }
+        case CHECKSUM: {
+            uint8_t calcChecksum;
+            command.checksum = byte;
+            calcChecksum = checksum(&command);
+            if (command.checksum != calcChecksum) {
+                error = TRUE;
+            }
+            // PORTD ^= _BV(PD7);
+            state = START;
+            fsm = PROCESSED;
+            break;
+        }
         default:
-            command.size = (command.size & 0xff00) | byte;
-            requested = 0U;
-            state = TOKEN;
-            break;
-        }
-        break;
-    }
-    case TOKEN:
-    {
-        command.token = byte;
-        state = BODY;
-        requested = command.size;
-        if (requested > STK500_MAX_SIZE || command.token != MESSAGE_TOKEN)
-        {
+            /* Unhandled state */
             error = TRUE;
-        }
-        break;
     }
 
-    case BODY:
-    {
-        if (requested > 0U)
-        {
-            command.body[command.size - requested] = byte;
-            requested--;
-        }
-
-        if (requested == 0U)
-        {
-            state = CHECKSUM;
-        }
-
-        break;
-    }
-    case CHECKSUM:
-    {
-        uint8_t calcChecksum;
-        command.checksum = byte;
-        calcChecksum = checksum(&command);
-        if (command.checksum != calcChecksum)
-        {
-            error = TRUE;
-        }
-        // PORTD ^= _BV(PD7);
-        state = START;
-        fsm = PROCESSED;
-        break;
-    }
-    default:
-        /* Unhandled state */
-        error = TRUE;
-    }
-
-    if (error)
-    {
+    if (error) {
         // Reset the state machine
         printfDBG("Process byte fsm error\n");
         state = START;
@@ -263,15 +233,13 @@ PRIVATE bool processByteSTK500(uint8_t byte)
     return TRUE;
 }
 
-PRIVATE bool handleCommandSTK500(void)
-{
+PRIVATE bool handleCommandSTK500(void) {
     uint8_t *commandBuffer, *resp, *req;
     uint8_t commandId;
     bool error = FALSE;
     uint32_t size = 0U;
 
-    if (fsm != PROCESSED)
-    {
+    if (fsm != PROCESSED) {
         // We cant handle command because it's not yet processed
         return FALSE;
     }
@@ -292,613 +260,532 @@ PRIVATE bool handleCommandSTK500(void)
     req = &commandBuffer[1];
     resp = response.body;
 
-    switch (commandId)
-    {
-    case CMD_SIGN_ON:
-    {
-        WRITE_BUF8(resp, CMD_SIGN_ON, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        WRITE_BUF8(resp, sizeof(STK500_SIGNATURE) - 1, size);
-        memcpy(resp, STK500_SIGNATURE, sizeof(STK500_SIGNATURE) - 1);
-        size += sizeof(STK500_SIGNATURE) - 1;
-        break;
-    }
-    case CMD_SET_PARAMETER:
-    {
-        uint8_t paramId;
-        uint8_t paramVal;
-        uint8_t status;
-
-        READ_BUF8(req, paramId);
-        READ_BUF8(req, paramVal);
-
-        status = setParamVal(paramId, paramVal);
-
-        WRITE_BUF8(resp, CMD_SET_PARAMETER, size);
-        WRITE_BUF8(resp, ((status == TRUE) ? STATUS_CMD_OK : STATUS_CMD_FAILED), size);
-        break;
-    }
-    case CMD_GET_PARAMETER:
-    {
-        uint8_t paramId;
-        uint8_t paramVal;
-        uint8_t status;
-
-        READ_BUF8(req, paramId);
-        status = getParamVal(paramId, &paramVal);
-        WRITE_BUF8(resp, CMD_GET_PARAMETER, size);
-
-        if (status)
-        {
+    switch (commandId) {
+        case CMD_SIGN_ON: {
+            WRITE_BUF8(resp, CMD_SIGN_ON, size);
             WRITE_BUF8(resp, STATUS_CMD_OK, size);
-            WRITE_BUF8(resp, paramVal, size);
+            WRITE_BUF8(resp, sizeof(STK500_SIGNATURE) - 1, size);
+            memcpy(resp, STK500_SIGNATURE, sizeof(STK500_SIGNATURE) - 1);
+            size += sizeof(STK500_SIGNATURE) - 1;
+            break;
         }
-        else
-        {
-            WRITE_BUF8(resp, STATUS_CMD_FAILED, size);
+        case CMD_SET_PARAMETER: {
+            uint8_t paramId;
+            uint8_t paramVal;
+            uint8_t status;
+
+            READ_BUF8(req, paramId);
+            READ_BUF8(req, paramVal);
+
+            status = setParamVal(paramId, paramVal);
+
+            WRITE_BUF8(resp, CMD_SET_PARAMETER, size);
+            WRITE_BUF8(resp, ((status == TRUE) ? STATUS_CMD_OK : STATUS_CMD_FAILED), size);
+            break;
         }
-        break;
-    }
-    case CMD_LOAD_ADDRESS:
-    {
-        // Only performing on devices with less than 64k flash
-        uint8_t byte;
+        case CMD_GET_PARAMETER: {
+            uint8_t paramId;
+            uint8_t paramVal;
+            uint8_t status;
 
-        if (settings.inProgMode)
-        {
-            settings.loadAddress = 0U;
-            READ_BUF8(req, byte);
-            settings.loadAddress |= ((uint32_t)byte) << 24;
+            READ_BUF8(req, paramId);
+            status = getParamVal(paramId, &paramVal);
+            WRITE_BUF8(resp, CMD_GET_PARAMETER, size);
 
-            READ_BUF8(req, byte);
-            settings.loadAddress |= ((uint32_t)byte) << 16;
-
-            READ_BUF8(req, byte);
-            settings.loadAddress |= ((uint32_t)byte) << 8;
-
-            READ_BUF8(req, byte);
-            settings.loadAddress |= byte;
+            if (status) {
+                WRITE_BUF8(resp, STATUS_CMD_OK, size);
+                WRITE_BUF8(resp, paramVal, size);
+            } else {
+                WRITE_BUF8(resp, STATUS_CMD_FAILED, size);
+            }
+            break;
         }
+        case CMD_LOAD_ADDRESS: {
+            // Only performing on devices with less than 64k flash
+            uint8_t byte;
 
-        WRITE_BUF8(resp, CMD_LOAD_ADDRESS, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        break;
-    }
-    case CMD_ENTER_PROGMODE_ISP:
-    {
-        uint8_t timeout;
-        uint8_t stabDelay;
-        uint8_t cmdexeDelay;
-        uint8_t syncLoops;
-        uint8_t byteDelay;
-        uint8_t pollValue;
-        uint8_t pollIndex;
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        bool entered = FALSE;
-        bool timeouted = FALSE;
-        uint64_t timerCounter;
+            if (settings.inProgMode) {
+                settings.loadAddress = 0U;
+                READ_BUF8(req, byte);
+                settings.loadAddress |= ((uint32_t)byte) << 24;
 
-        READ_BUF8(req, timeout);
-        READ_BUF8(req, stabDelay);
-        READ_BUF8(req, cmdexeDelay);
-        READ_BUF8(req, syncLoops);
-        READ_BUF8(req, byteDelay);
-        READ_BUF8(req, pollValue);
-        READ_BUF8(req, pollIndex);
+                READ_BUF8(req, byte);
+                settings.loadAddress |= ((uint32_t)byte) << 16;
 
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+                READ_BUF8(req, byte);
+                settings.loadAddress |= ((uint32_t)byte) << 8;
 
-        settings.inProgMode = FALSE;
-
-        WRITE_BUF8(resp, CMD_ENTER_PROGMODE_ISP, size);
-
-        settings.timeout = timeout;
-
-        for (uint8_t retry = 0; (retry < syncLoops && !entered && !timeouted); retry++)
-        {
-            /* Reset target */
-            PORTB &= ~(_BV(PB7));
-            PORTD |= _BV(PD6);
-
-            delay_ms(stabDelay);
-
-            PORTD &= ~(_BV(PD6));
-
-            for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++)
-            {
-                targetSend(cmd[index]);
-                delay_ms(byteDelay);
+                READ_BUF8(req, byte);
+                settings.loadAddress |= byte;
             }
 
-            delay_ms(cmdexeDelay);
+            WRITE_BUF8(resp, CMD_LOAD_ADDRESS, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            break;
+        }
+        case CMD_ENTER_PROGMODE_ISP: {
+            uint8_t timeout;
+            uint8_t stabDelay;
+            uint8_t cmdexeDelay;
+            uint8_t syncLoops;
+            uint8_t byteDelay;
+            uint8_t pollValue;
+            uint8_t pollIndex;
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            bool entered = FALSE;
+            bool timeouted = FALSE;
+            uint64_t timerCounter;
 
-            timerCounter = timer_read_counter();
+            READ_BUF8(req, timeout);
+            READ_BUF8(req, stabDelay);
+            READ_BUF8(req, cmdexeDelay);
+            READ_BUF8(req, syncLoops);
+            READ_BUF8(req, byteDelay);
+            READ_BUF8(req, pollValue);
+            READ_BUF8(req, pollIndex);
 
-            if (pollIndex != 0U)
-            {
-                /* Should poll for the byte */
-                uint8_t byteIndex = 0U;
-                uint8_t recvByte;
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
 
-                while (byteIndex < STK500_ISP_COMMAND_LEN)
-                {
-                    if ((timer_read_counter() - timerCounter) >= settings.timeout)
-                    {
-                        // We have a timeout here
-                        timeouted = TRUE;
-                        break;
-                    }
-                    if (targetGet(&recvByte))
-                    {
-                        byteIndex++;
-                        if (byteIndex == pollIndex && recvByte == pollValue)
-                        {
-                            entered = TRUE;
+            settings.inProgMode = FALSE;
+
+            WRITE_BUF8(resp, CMD_ENTER_PROGMODE_ISP, size);
+
+            settings.timeout = timeout;
+
+            for (uint8_t retry = 0; (retry < syncLoops && !entered && !timeouted); retry++) {
+                /* Reset target */
+                PORTB &= ~(_BV(PB7));
+                PORTD |= _BV(PD6);
+
+                delay_ms(stabDelay);
+
+                PORTD &= ~(_BV(PD6));
+
+                for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++) {
+                    targetSend(cmd[index]);
+                    delay_ms(byteDelay);
+                }
+
+                delay_ms(cmdexeDelay);
+
+                timerCounter = timer_read_counter();
+
+                if (pollIndex != 0U) {
+                    /* Should poll for the byte */
+                    uint8_t byteIndex = 0U;
+                    uint8_t recvByte;
+
+                    while (byteIndex < STK500_ISP_COMMAND_LEN) {
+                        if ((timer_read_counter() - timerCounter) >= settings.timeout) {
+                            // We have a timeout here
+                            timeouted = TRUE;
+                            break;
+                        }
+                        if (targetGet(&recvByte)) {
+                            byteIndex++;
+                            if (byteIndex == pollIndex && recvByte == pollValue) {
+                                entered = TRUE;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        if (timeouted)
-        {
-            printfDBG("Timeout %d %d %d %d\n", stabDelay, cmdexeDelay, byteDelay, settings.timeout);
-            WRITE_BUF8(resp, STATUS_CMD_TOUT, size);
-        }
-        else if (entered)
-        {
-            settings.inProgMode = TRUE;
-            WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        }
-        else
-        {
-            WRITE_BUF8(resp, STATUS_CMD_FAILED, size);
-        }
-
-        break;
-    }
-    case CMD_LEAVE_PROGMODE_ISP:
-    {
-        uint8_t preDelay;
-        uint8_t postDelay;
-
-        READ_BUF8(req, preDelay);
-        READ_BUF8(req, postDelay);
-
-        if (settings.inProgMode)
-        {
-            settings.inProgMode = FALSE;
-            delay_ms(preDelay);
-
-            PORTD |= _BV(PD6);
-
-            delay_ms(postDelay);
-        }
-
-        WRITE_BUF8(resp, CMD_LEAVE_PROGMODE_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-
-        break;
-    }
-    case CMD_CHIP_ERASE_ISP:
-    {
-        uint8_t eraseDelay;
-        uint8_t pollMethod;
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t out[STK500_ISP_COMMAND_LEN];
-        bool error = FALSE;
-        uint64_t timerCounter = timer_read_counter();
-
-        READ_BUF8(req, eraseDelay);
-        READ_BUF8(req, pollMethod);
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
-
-        WRITE_BUF8(resp, CMD_CHIP_ERASE_ISP, size);
-
-        if (!sendCommand(cmd, out))
-        {
-            error = TRUE;
-        }
-        if (!error)
-        {
-            if (pollMethod == 0U)
-            {
-                delay_ms(eraseDelay);
+            if (timeouted) {
+                printfDBG("Timeout %d %d %d %d\n", stabDelay, cmdexeDelay, byteDelay, settings.timeout);
+                WRITE_BUF8(resp, STATUS_CMD_TOUT, size);
+            } else if (entered) {
+                settings.inProgMode = TRUE;
+                WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            } else {
+                WRITE_BUF8(resp, STATUS_CMD_FAILED, size);
             }
-            else
-            {
-                uint8_t pollingValue = 1U;
-                while (pollingValue && !error)
-                {
-                    if (timer_read_counter() - timerCounter >= settings.timeout)
-                    {
-                        error = TRUE;
-                        break;
-                    }
-                    if (!pollRDY(&pollingValue))
-                    {
-                        // Error timeout
-                        error = TRUE;
-                        break;
+
+            break;
+        }
+        case CMD_LEAVE_PROGMODE_ISP: {
+            uint8_t preDelay;
+            uint8_t postDelay;
+
+            READ_BUF8(req, preDelay);
+            READ_BUF8(req, postDelay);
+
+            if (settings.inProgMode) {
+                settings.inProgMode = FALSE;
+                delay_ms(preDelay);
+
+                PORTD |= _BV(PD6);
+
+                delay_ms(postDelay);
+            }
+
+            WRITE_BUF8(resp, CMD_LEAVE_PROGMODE_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            break;
+        }
+        case CMD_CHIP_ERASE_ISP: {
+            uint8_t eraseDelay;
+            uint8_t pollMethod;
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t out[STK500_ISP_COMMAND_LEN];
+            bool error = FALSE;
+            uint64_t timerCounter = timer_read_counter();
+
+            READ_BUF8(req, eraseDelay);
+            READ_BUF8(req, pollMethod);
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+
+            WRITE_BUF8(resp, CMD_CHIP_ERASE_ISP, size);
+
+            if (!sendCommand(cmd, out)) {
+                error = TRUE;
+            }
+            if (!error) {
+                if (pollMethod == 0U) {
+                    delay_ms(eraseDelay);
+                } else {
+                    uint8_t pollingValue = 1U;
+                    while (pollingValue && !error) {
+                        if (timer_read_counter() - timerCounter >= settings.timeout) {
+                            error = TRUE;
+                            break;
+                        }
+                        if (!pollRDY(&pollingValue)) {
+                            // Error timeout
+                            error = TRUE;
+                            break;
+                        }
                     }
                 }
             }
+            WRITE_BUF8(resp, (error == TRUE) ? STATUS_CMD_TOUT : STATUS_CMD_OK, size);
+
+            break;
         }
-        WRITE_BUF8(resp, (error == TRUE) ? STATUS_CMD_TOUT : STATUS_CMD_OK, size);
+        case CMD_PROGRAM_FLASH_ISP: {
+            uint16_t numBytes = 0U;
+            uint8_t mode;
+            uint8_t delay;
+            uint8_t cmd1, cmd2, cmd3;
+            uint8_t poll1, poll2;
+            uint8_t dataByte;
+            uint64_t timerCounter;
+            uint8_t loadCmd[STK500_ISP_COMMAND_LEN] = {
+                0U,
+            };
+            uint8_t writeCmd[STK500_ISP_COMMAND_LEN] = {
+                0U,
+            };
+            uint8_t readCmd[STK500_ISP_COMMAND_LEN] = {
+                0U,
+            };
+            uint8_t output[STK500_ISP_COMMAND_LEN] = {
+                0U,
+            };
+            uint32_t copyAddress;
+            bool error = FALSE;
 
-        break;
-    }
-    case CMD_PROGRAM_FLASH_ISP:
-    {
-        uint16_t numBytes = 0U;
-        uint8_t mode;
-        uint8_t delay;
-        uint8_t cmd1, cmd2, cmd3;
-        uint8_t poll1, poll2;
-        uint8_t dataByte;
-        uint64_t timerCounter;
-        uint8_t loadCmd[STK500_ISP_COMMAND_LEN] = {
-            0U,
-        };
-        uint8_t writeCmd[STK500_ISP_COMMAND_LEN] = {
-            0U,
-        };
-        uint8_t readCmd[STK500_ISP_COMMAND_LEN] = {
-            0U,
-        };
-        uint8_t output[STK500_ISP_COMMAND_LEN] = {
-            0U,
-        };
-        uint32_t copyAddress;
-        bool error = FALSE;
+            READ_BUF8(req, dataByte);
+            numBytes |= ((uint16_t)numBytes << 8) & 0xff00;
+            READ_BUF8(req, dataByte);
+            numBytes |= dataByte;
 
-        READ_BUF8(req, dataByte);
-        numBytes |= ((uint16_t)numBytes << 8) & 0xff00;
-        READ_BUF8(req, dataByte);
-        numBytes |= dataByte;
+            READ_BUF8(req, mode);
+            READ_BUF8(req, delay);
+            READ_BUF8(req, cmd1);
+            READ_BUF8(req, cmd2);
+            READ_BUF8(req, cmd3);
+            READ_BUF8(req, poll1);
+            READ_BUF8(req, poll2);
 
-        READ_BUF8(req, mode);
-        READ_BUF8(req, delay);
-        READ_BUF8(req, cmd1);
-        READ_BUF8(req, cmd2);
-        READ_BUF8(req, cmd3);
-        READ_BUF8(req, poll1);
-        READ_BUF8(req, poll2);
+            WRITE_BUF8(resp, CMD_PROGRAM_FLASH_ISP, size);
 
-        WRITE_BUF8(resp, CMD_PROGRAM_FLASH_ISP, size);
+            // Program
+            if (STK500_FLASH_MODE_BIT(mode)) {
+                // Page mode
 
-        // Program
-        if (STK500_FLASH_MODE_BIT(mode))
-        {
-            // Page mode
+                writeCmd[0] = cmd2;
+                writeCmd[1] = (settings.loadAddress >> 8) & 0xff;
+                writeCmd[2] = settings.loadAddress & 0xff;
 
-            writeCmd[0] = cmd2;
-            writeCmd[1] = (settings.loadAddress >> 8) & 0xff;
-            writeCmd[2] = settings.loadAddress & 0xff;
+                readCmd[0] = cmd3;
 
-            readCmd[0] = cmd3;
+                copyAddress = settings.loadAddress;
 
+                // Load page values
+                for (uint16_t index = 0; index < (numBytes / 2) && !error; index++) {
+                    // Low byte
+                    loadCmd[0] = cmd1;
+                    loadCmd[1] = ((copyAddress >> 8) & 0xff);
+                    loadCmd[2] = (copyAddress & 0xff);
+                    loadCmd[3] = req[index * 2];
+                    if (!sendCommand(loadCmd, output)) {
+                        error = TRUE;
+                        break;
+                    }
+
+                    // High byte
+                    loadCmd[0] = STK500_FLASH_HIGH_BYTE_CMD(cmd1);
+                    // Same address
+                    loadCmd[3] = req[index * 2 + 1];
+                    if (!sendCommand(loadCmd, output)) {
+                        error = TRUE;
+                        break;
+                    }
+                    copyAddress++;
+                }
+
+                // Commit page
+                if (!error && STK500_FLASH_PAGE_MODE_WRITE_BIT(mode) && !sendCommand(writeCmd, output)) {
+                    error = TRUE;
+                }
+
+                if (STK500_FLASH_PAGE_MODE_TIME_BIT(mode)) {
+                    delay_ms(delay);
+                } else if (STK500_FLASH_PAGE_MODE_POLL_BIT(mode)) {
+                } else if (STK500_FLASH_PAGE_MODE_RDY_BIT(mode)) {
+                } else {
+                    error = TRUE;
+                }
+            }
+            {
+                // Word mode
+            }
+
+            printfDBG("CMD_PROGRAM_FLASH_ISP %hu 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", numBytes, mode, delay, cmd1, cmd2, cmd3, poll1, poll2);
+
+            if (error) {
+                WRITE_BUF8(resp, STATUS_CMD_TOUT, size);
+            } else {
+                WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            }
+
+            break;
+        }
+        case CMD_READ_FLASH_ISP: {
+            uint16_t numBytes = 0U;
+            uint8_t dataByte;
+            uint8_t cmd1;
+            uint8_t readCmd[STK500_ISP_COMMAND_LEN] = {
+                0U,
+            };
+            uint8_t out[STK500_ISP_COMMAND_LEN];
+            uint32_t copyAddress;
+            bool error = FALSE;
+
+            READ_BUF8(req, dataByte);
+            numBytes |= ((uint16_t)numBytes << 8) & 0xff00;
+            READ_BUF8(req, dataByte);
+            numBytes |= dataByte;
+
+            READ_BUF8(req, cmd1);
             copyAddress = settings.loadAddress;
 
-            // Load page values
-            for (uint16_t index = 0; index < (numBytes / 2) && !error; index++)
-            {
-                // Low byte
-                loadCmd[0] = cmd1;
-                loadCmd[1] = ((copyAddress >> 8) & 0xff);
-                loadCmd[2] = (copyAddress & 0xff);
-                loadCmd[3] = req[index * 2];
-                if (!sendCommand(loadCmd, output))
-                {
+            WRITE_BUF8(resp, CMD_READ_FLASH_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            for (uint16_t index = 0U; index < numBytes / 2 && !error; index++) {
+                readCmd[0] = cmd1;
+                readCmd[1] = (copyAddress >> 8) & 0xff;
+                readCmd[2] = copyAddress & 0xff;
+                if (!sendCommand(readCmd, out)) {
                     error = TRUE;
                     break;
                 }
 
-                // High byte
-                loadCmd[0] = STK500_FLASH_HIGH_BYTE_CMD(cmd1);
+                WRITE_BUF8(resp, out[STK500_ISP_COMMAND_VALUE_INDEX], size);
+                // printfDBG("Read 0x%02x\n", out[STK500_ISP_COMMAND_VALUE_INDEX]);
+                readCmd[0] = STK500_FLASH_HIGH_BYTE_CMD(cmd1);
                 // Same address
-                loadCmd[3] = req[index * 2 + 1];
-                if (!sendCommand(loadCmd, output))
-                {
+
+                if (!sendCommand(readCmd, out)) {
                     error = TRUE;
                     break;
                 }
+                WRITE_BUF8(resp, out[STK500_ISP_COMMAND_VALUE_INDEX], size);
+                // printfDBG("Read 0x%02x\n", out[STK500_ISP_COMMAND_VALUE_INDEX]);
+
                 copyAddress++;
             }
 
-            // Commit page
-            if (!error && STK500_FLASH_PAGE_MODE_WRITE_BIT(mode) && !sendCommand(writeCmd, output))
-            {
-                error = TRUE;
+            // In case of one low byte
+            if (numBytes % 2) {
+                readCmd[0] = cmd1;
+                readCmd[1] = (copyAddress >> 8) & 0xff;
+                readCmd[2] = copyAddress & 0xff;
+                if (!sendCommand(readCmd, out)) {
+                    error = TRUE;
+                    break;
+                }
+
+                WRITE_BUF8(resp, out[STK500_ISP_COMMAND_VALUE_INDEX], size);
+            }
+            if (!error) {
+                WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            } else {
+                // Overwrite hack
+                response.body[1] = STATUS_CMD_FAILED;
+                size = 2;
             }
 
-            if (STK500_FLASH_PAGE_MODE_TIME_BIT(mode))
-            {
-                delay_ms(delay);
-            }
-            else if (STK500_FLASH_PAGE_MODE_POLL_BIT(mode))
-            {
-            }
-            else if (STK500_FLASH_PAGE_MODE_RDY_BIT(mode))
-            {
-            }
-            else
-            {
-                error = TRUE;
-            }
+            break;
         }
-        {
-            // Word mode
-        }
+        case CMD_READ_OSCCAL_ISP: {
+            uint8_t retAddr;
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t recvByte;
+            uint8_t byteIndex = 0U;
 
-        printfDBG("CMD_PROGRAM_FLASH_ISP %hu 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", numBytes, mode, delay, cmd1, cmd2, cmd3, poll1, poll2);
+            READ_BUF8(req, retAddr);
 
-        if (error)
-        {
-            WRITE_BUF8(resp, STATUS_CMD_TOUT, size);
-        }
-        else
-        {
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+
+            WRITE_BUF8(resp, CMD_READ_OSCCAL_ISP, size);
             WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        }
 
-        break;
-    }
-    case CMD_READ_FLASH_ISP:
-    {
-        uint16_t numBytes = 0U;
-        uint8_t dataByte;
-        uint8_t cmd1;
-        uint8_t readCmd[STK500_ISP_COMMAND_LEN] = {
-            0U,
-        };
-        uint8_t out[STK500_ISP_COMMAND_LEN];
-        uint32_t copyAddress;
-        bool error = FALSE;
-
-        READ_BUF8(req, dataByte);
-        numBytes |= ((uint16_t)numBytes << 8) & 0xff00;
-        READ_BUF8(req, dataByte);
-        numBytes |= dataByte;
-
-        READ_BUF8(req, cmd1);
-        copyAddress = settings.loadAddress;
-
-        WRITE_BUF8(resp, CMD_READ_FLASH_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-
-        for (uint16_t index = 0U; index < numBytes / 2 && !error; index++)
-        {
-            readCmd[0] = cmd1;
-            readCmd[1] = (copyAddress >> 8) & 0xff;
-            readCmd[2] = copyAddress & 0xff;
-            if (!sendCommand(readCmd, out))
-            {
-                error = TRUE;
-                break;
+            for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++) {
+                targetSend(cmd[index]);
             }
 
-            WRITE_BUF8(resp, out[STK500_ISP_COMMAND_VALUE_INDEX], size);
-            // printfDBG("Read 0x%02x\n", out[STK500_ISP_COMMAND_VALUE_INDEX]);
-            readCmd[0] = STK500_FLASH_HIGH_BYTE_CMD(cmd1);
-            // Same address
-
-            if (!sendCommand(readCmd, out))
-            {
-                error = TRUE;
-                break;
+            /* Should poll for the byte */
+            while (byteIndex < STK500_ISP_COMMAND_LEN) {
+                if (targetGet(&recvByte)) {
+                    byteIndex++;
+                    if (byteIndex == retAddr) {
+                        WRITE_BUF8(resp, recvByte, size);
+                    }
+                }
             }
-            WRITE_BUF8(resp, out[STK500_ISP_COMMAND_VALUE_INDEX], size);
-            // printfDBG("Read 0x%02x\n", out[STK500_ISP_COMMAND_VALUE_INDEX]);
-
-            copyAddress++;
-        }
-
-        // In case of one low byte
-        if (numBytes % 2)
-        {
-            readCmd[0] = cmd1;
-            readCmd[1] = (copyAddress >> 8) & 0xff;
-            readCmd[2] = copyAddress & 0xff;
-            if (!sendCommand(readCmd, out))
-            {
-                error = TRUE;
-                break;
-            }
-
-            WRITE_BUF8(resp, out[STK500_ISP_COMMAND_VALUE_INDEX], size);
-        }
-        if (!error)
-        {
             WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            break;
         }
-        else
-        {
-            // Overwrite hack
-            response.body[1] = STATUS_CMD_FAILED;
-            size = 2;
+        case CMD_PROGRAM_LOCK_ISP: {
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t out[STK500_ISP_COMMAND_LEN];
+
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+
+            (void)sendCommand(cmd, out);
+
+            WRITE_BUF8(resp, CMD_PROGRAM_LOCK_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            break;
         }
+        case CMD_READ_LOCK_ISP: {
+            uint8_t retAddr;
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t recvByte;
+            uint8_t byteIndex = 0U;
 
-        break;
-    }
-    case CMD_READ_OSCCAL_ISP:
-    {
-        uint8_t retAddr;
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t recvByte;
-        uint8_t byteIndex = 0U;
+            READ_BUF8(req, retAddr);
 
-        READ_BUF8(req, retAddr);
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
 
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+            WRITE_BUF8(resp, CMD_READ_LOCK_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
 
-        WRITE_BUF8(resp, CMD_READ_OSCCAL_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++) {
+                targetSend(cmd[index]);
+            }
 
-        for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++)
-        {
-            targetSend(cmd[index]);
-        }
-
-        /* Should poll for the byte */
-        while (byteIndex < STK500_ISP_COMMAND_LEN)
-        {
-            if (targetGet(&recvByte))
-            {
-                byteIndex++;
-                if (byteIndex == retAddr)
-                {
-                    WRITE_BUF8(resp, recvByte, size);
+            /* Should poll for the byte */
+            while (byteIndex < STK500_ISP_COMMAND_LEN) {
+                if (targetGet(&recvByte)) {
+                    byteIndex++;
+                    if (byteIndex == retAddr) {
+                        WRITE_BUF8(resp, recvByte, size);
+                    }
                 }
             }
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            break;
         }
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+        case CMD_PROGRAM_FUSE_ISP: {
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t out[STK500_ISP_COMMAND_LEN];
 
-        break;
-    }
-    case CMD_PROGRAM_LOCK_ISP:
-    {
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t out[STK500_ISP_COMMAND_LEN];
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
 
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+            (void)sendCommand(cmd, out);
 
-        (void)sendCommand(cmd, out);
+            WRITE_BUF8(resp, CMD_PROGRAM_FUSE_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
 
-        WRITE_BUF8(resp, CMD_PROGRAM_LOCK_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-
-        break;
-    }
-    case CMD_READ_LOCK_ISP:
-    {
-        uint8_t retAddr;
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t recvByte;
-        uint8_t byteIndex = 0U;
-
-        READ_BUF8(req, retAddr);
-
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
-
-        WRITE_BUF8(resp, CMD_READ_LOCK_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-
-        for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++)
-        {
-            targetSend(cmd[index]);
+            break;
         }
+        case CMD_READ_FUSE_ISP: {
+            uint8_t retAddr;
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t recvByte;
+            uint8_t byteIndex = 0U;
 
-        /* Should poll for the byte */
-        while (byteIndex < STK500_ISP_COMMAND_LEN)
-        {
-            if (targetGet(&recvByte))
-            {
-                byteIndex++;
-                if (byteIndex == retAddr)
-                {
-                    WRITE_BUF8(resp, recvByte, size);
+            READ_BUF8(req, retAddr);
+
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+
+            WRITE_BUF8(resp, CMD_READ_FUSE_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++) {
+                targetSend(cmd[index]);
+            }
+
+            /* Should poll for the byte */
+            while (byteIndex < STK500_ISP_COMMAND_LEN) {
+                if (targetGet(&recvByte)) {
+                    byteIndex++;
+                    if (byteIndex == retAddr) {
+                        WRITE_BUF8(resp, recvByte, size);
+                    }
                 }
             }
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+
+            break;
         }
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+        case CMD_READ_SIGNATURE_ISP: {
+            uint8_t retAddr;
+            uint8_t cmd[STK500_ISP_COMMAND_LEN];
+            uint8_t recvByte;
+            uint8_t byteIndex = 0U;
 
-        break;
-    }
-    case CMD_PROGRAM_FUSE_ISP:
-    {
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t out[STK500_ISP_COMMAND_LEN];
+            READ_BUF8(req, retAddr);
 
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
+            memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
 
-        (void)sendCommand(cmd, out);
+            WRITE_BUF8(resp, CMD_READ_SIGNATURE_ISP, size);
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
 
-        WRITE_BUF8(resp, CMD_PROGRAM_FUSE_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++) {
+                targetSend(cmd[index]);
+            }
 
-        break;
-    }
-    case CMD_READ_FUSE_ISP:
-    {
-        uint8_t retAddr;
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t recvByte;
-        uint8_t byteIndex = 0U;
-
-        READ_BUF8(req, retAddr);
-
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
-
-        WRITE_BUF8(resp, CMD_READ_FUSE_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-
-        for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++)
-        {
-            targetSend(cmd[index]);
-        }
-
-        /* Should poll for the byte */
-        while (byteIndex < STK500_ISP_COMMAND_LEN)
-        {
-            if (targetGet(&recvByte))
-            {
-                byteIndex++;
-                if (byteIndex == retAddr)
-                {
-                    WRITE_BUF8(resp, recvByte, size);
+            /* Should poll for the byte */
+            while (byteIndex < STK500_ISP_COMMAND_LEN) {
+                if (targetGet(&recvByte)) {
+                    byteIndex++;
+                    if (byteIndex == retAddr) {
+                        WRITE_BUF8(resp, recvByte, size);
+                    }
                 }
             }
+            WRITE_BUF8(resp, STATUS_CMD_OK, size);
+            break;
         }
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
+        default:
+            /* Unhandleded command */
+            error = TRUE;
 
-        break;
-    }
-    case CMD_READ_SIGNATURE_ISP:
-    {
-        uint8_t retAddr;
-        uint8_t cmd[STK500_ISP_COMMAND_LEN];
-        uint8_t recvByte;
-        uint8_t byteIndex = 0U;
-
-        READ_BUF8(req, retAddr);
-
-        memcpy(cmd, req, STK500_ISP_COMMAND_LEN);
-
-        WRITE_BUF8(resp, CMD_READ_SIGNATURE_ISP, size);
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-
-        for (uint8_t index = 0; index < STK500_ISP_COMMAND_LEN; index++)
-        {
-            targetSend(cmd[index]);
-        }
-
-        /* Should poll for the byte */
-        while (byteIndex < STK500_ISP_COMMAND_LEN)
-        {
-            if (targetGet(&recvByte))
-            {
-                byteIndex++;
-                if (byteIndex == retAddr)
-                {
-                    WRITE_BUF8(resp, recvByte, size);
-                }
-            }
-        }
-        WRITE_BUF8(resp, STATUS_CMD_OK, size);
-        break;
-    }
-    default:
-        /* Unhandleded command */
-        error = TRUE;
-
-        break;
+            break;
     }
 
-    if (error)
-    {
+    if (error) {
         printfDBG("Process command fsm error\n");
         fsm = IDLE;
         return FALSE;
@@ -917,18 +804,15 @@ PRIVATE bool handleCommandSTK500(void)
     return TRUE;
 }
 
-PUBLIC void tickSTK500(void)
-{
+PUBLIC void tickSTK500(void) {
     uint8_t byte;
 
-    if (userGet(&byte))
-    {
+    if (userGet(&byte)) {
         printfDBG("RCV 0x%02x\n", byte);
         processByteSTK500(byte);
     }
 
-    if (handleCommandSTK500())
-    {
+    if (handleCommandSTK500()) {
         printfDBG("Command handled\n");
     }
 
@@ -939,8 +823,7 @@ PUBLIC void tickSTK500(void)
     _delay_ms(1);
 }
 
-PUBLIC bool initSTK500(uartSendByteFunc_t uartSend, uartGetByteFunc_t uartGet, spiSendByteFunc_t spiSend, spiGetByteFunc_t spiGet, resetTargetFunc_t reset)
-{
+PUBLIC bool initSTK500(uartSendByteFunc_t uartSend, uartGetByteFunc_t uartGet, spiSendByteFunc_t spiSend, spiGetByteFunc_t spiGet, resetTargetFunc_t reset) {
     userSend = uartSend;
     userGet = uartGet;
     targetSend = spiSend;

@@ -3,8 +3,7 @@
 
 #include <util.h>
 
-typedef struct CircBuffer
-{
+typedef struct CircBuffer {
     uint32_t length;
     uint32_t indexRead;
     uint32_t buff_size;

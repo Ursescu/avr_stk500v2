@@ -1,7 +1,7 @@
 #ifndef _SPI_H_
 #define _SPI_H_
 
-#include "util.h"
+#include <util.h>
 
 #define SPI_BUFFER_SIZE 100
 
