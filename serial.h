@@ -2,13 +2,26 @@
 #define _SERIAL_H_
 
 #include <avr/io.h>
+#include "util.h"
 
-uint8_t initSerial(uint8_t ucDataBits, uint8_t eParity);
-uint8_t serialGetByte(uint8_t *pucByte);
-uint8_t serialPutByte(uint8_t ucByte);
-void enableSerial(uint8_t xRxEnable, uint8_t xTxEnable);
+#define SERIAL_BUFFER_SIZE 100
 
-void serialTransmitCb(void);
-void serialReceiveCb(void);
+typedef enum
+{
+    PAR_NONE,
+    PAR_ODD,
+    PAR_EVEN
+} UART_parity;
+
+typedef enum
+{
+    BITS_8,
+    BITS_7
+} UART_bits;
+
+PUBLIC uint8_t initUart(uint64_t baudrate, UART_bits bits, UART_parity parity);
+
+PUBLIC bool getUartByte(uint8_t *byte); 
+PUBLIC bool sendUartByte(uint8_t byte);
 
 #endif

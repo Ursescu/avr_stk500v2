@@ -1,28 +1,26 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define BAUD 38400
-#include <util/setbaud.h>
+#include <util.h>
+#include <serial.h>
+#include <buffer.h>
 
-#include "util.h"
-#include "serial.h"
+static uint8_t rxUartBuffer[SERIAL_BUFFER_SIZE];
+static uint8_t txUartBuffer[SERIAL_BUFFER_SIZE];
+
+CIRC_BUFFER(uartTxBuffer, txUartBuffer, SERIAL_BUFFER_SIZE);
+CIRC_BUFFER(uartRxBuffer, rxUartBuffer, SERIAL_BUFFER_SIZE);
 
 #define UART_BAUD_CALC(UART_BAUD_RATE, F_OSC) \
     ((F_OSC) / ((UART_BAUD_RATE)*16UL) - 1)
 
-void enableSerial(uint8_t xRxEnable, uint8_t xTxEnable)
+PRIVATE void enableSerial(uint8_t xRxEnable, uint8_t xTxEnable)
 {
-
     UCSR0B |= _BV(TXEN0);
-
 
     if (xRxEnable)
     {
         UCSR0B |= _BV(RXEN0) | _BV(RXCIE0);
-    }
-    else
-    {
-        UCSR0B &= ~(_BV(RXEN0) | _BV(RXCIE0));
     }
 
     if (xTxEnable)
@@ -35,58 +33,77 @@ void enableSerial(uint8_t xRxEnable, uint8_t xTxEnable)
     }
 }
 
-uint8_t initSerial(uint8_t ucDataBits, uint8_t eParity)
+PUBLIC uint8_t initUart(uint64_t baudrate, UART_bits bits, UART_parity parity)
 {
-    uint8_t ucUCSRC = 0;
+    uint8_t UCSRC = 0U;
+    uint16_t UBRR = 0U;
+    
+    UBRR = UART_BAUD_CALC(baudrate, F_CPU);
 
-    UBRR0H = UBRRH_VALUE;
-    UBRR0L = UBRRL_VALUE;
+    UBRR0H = (UBRR >> 8) % 0xff;
+    UBRR0L = UBRR & 0xff;
 
-    switch (eParity)
+    switch (parity)
     {
-    case 0:
-        ucUCSRC |= _BV(UPM01);
+    case PAR_EVEN:
+        UCSRC |= _BV(UPM01);
         break;
-    case 1:
-        ucUCSRC |= _BV(UPM01) | _BV(UPM00);
+    case PAR_ODD:
+        UCSRC |= _BV(UPM01) | _BV(UPM00);
         break;
-    case 2:
+    case PAR_NONE:
         break;
     }
 
-    switch (ucDataBits)
+    switch (bits)
     {
-    case 8:
-        ucUCSRC |= _BV(UCSZ00) | _BV(UCSZ01);
+    case BITS_8:
+        UCSRC |= _BV(UCSZ00) | _BV(UCSZ01);
         break;
-    case 7:
-        ucUCSRC |= _BV(UCSZ01);
+    case BITS_7:
+        UCSRC |= _BV(UCSZ01);
         break;
     }
 
-    UCSR0C |= ucUCSRC;
+    UCSR0C |= UCSRC;
 
-    return 1;
+    enableSerial(1, 0);
+
+    return TRUE;
 }
 
-uint8_t serialPutByte(uint8_t ucByte)
+PUBLIC bool getUartByte(uint8_t *byte)
 {
-    UDR0 = ucByte;
-    return 1;
+    return getByteBuffer(&uartRxBuffer, byte);
 }
 
-uint8_t serialGetByte(uint8_t *pucByte)
+PUBLIC bool sendUartByte(uint8_t byte)
 {
-    *pucByte = UDR0;
-    return 1;
+    if (writeByteBuffer(&uartTxBuffer, byte))
+    {
+        /* Enable TX */
+        enableSerial(1, 1);
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 ISR(USART0_UDRE_vect)
 {
-    serialTransmitCb();
+    uint8_t byte;
+
+    if (getByteBuffer(&uartTxBuffer, &byte))
+    {
+        UDR0 = byte;
+    }
+    else
+    {
+        enableSerial(1, 0);
+    }
 }
 
 ISR(USART0_RX_vect)
 {
-    serialReceiveCb();
+    writeByteBuffer(&uartRxBuffer, UDR0);
 }
