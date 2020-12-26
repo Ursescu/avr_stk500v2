@@ -1,7 +1,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define BAUD 38400
+#define BAUD 250000
 #include <util/setbaud.h>
 
 #include "util.h"
@@ -40,31 +40,34 @@ PRIVATE void enableSerial(uint8_t xRxEnable, uint8_t xTxEnable)
     }
 }
 
-PUBLIC uint8_t initUartDBG(uint8_t ucDataBits, uint8_t eParity)
+PUBLIC uint8_t initUartDBG(uint64_t baudrate, UART_bits bits, UART_parity parity)
 {
     uint8_t ucUCSRC = 0;
+    uint16_t UBRR = 0U;
 
-    UBRR1H = UBRRH_VALUE;
-    UBRR1L = UBRRL_VALUE;
+    UBRR = UART_BAUD_CALC(baudrate, F_CPU);
 
-    switch (eParity)
+    UBRR1H = (UBRR >> 8) & 0xff;
+    UBRR1L = UBRR & 0xff;
+
+    switch (parity)
     {
-    case 0:
+    case PAR_EVEN:
         ucUCSRC |= _BV(UPM11);
         break;
-    case 1:
+    case PAR_ODD:
         ucUCSRC |= _BV(UPM11) | _BV(UPM10);
         break;
-    case 2:
+    case PAR_NONE:
         break;
     }
 
-    switch (ucDataBits)
+    switch (bits)
     {
-    case 8:
+    case BITS_8:
         ucUCSRC |= _BV(UCSZ10) | _BV(UCSZ11);
         break;
-    case 7:
+    case BITS_7:
         ucUCSRC |= _BV(UCSZ11);
         break;
     }
@@ -93,7 +96,8 @@ PUBLIC bool sendUartByteDBG(uint8_t byte)
     return FALSE;
 }
 
-PUBLIC bool isEmptyUartBufferDBG(void) {
+PUBLIC bool isEmptyUartBufferDBG(void)
+{
     return isEmptyBuffer(&uartTxBuffer);
 }
 

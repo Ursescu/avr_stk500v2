@@ -6,7 +6,20 @@
 
 #define SERIAL_BUFFER_SIZE 100
 
-PUBLIC uint8_t initUartDBG(uint8_t ucDataBits, uint8_t eParity);
+typedef enum
+{
+    PAR_NONE,
+    PAR_ODD,
+    PAR_EVEN
+} UART_parity;
+
+typedef enum
+{
+    BITS_8,
+    BITS_7
+} UART_bits;
+
+PUBLIC uint8_t initUartDBG(uint64_t baudrate, UART_bits bits, UART_parity parity);
 
 PUBLIC bool getUartByteDBG(uint8_t *byte);
 PUBLIC bool sendUartByteDBG(uint8_t byte);
