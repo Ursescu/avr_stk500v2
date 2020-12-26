@@ -1,6 +1,6 @@
 #include <avr/io.h>
 #include <stdio.h>
-#include "dbg.h"
+#include <dbg.h>
 #include "serialdbg.h"
 #include <util/delay.h>
 
@@ -25,7 +25,7 @@ PUBLIC bool initDBG(void)
 {
     stdout = &uartStdout;
 
-    initUartDBG(8, 2);
+    initUartDBG(DEBUG_UART_BAUD, BITS_8, PAR_NONE);
 
     initiated = TRUE;
 
